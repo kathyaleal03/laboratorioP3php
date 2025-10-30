@@ -33,7 +33,17 @@ class EmpleadoController extends Controller
             $query->where('estado', request('estado'));
         }
 
-        $empleados = $query->orderBy('nombre')->paginate(10)->appends(request()->except('page'));
+       
+        $orden = request('orden');
+        if ($orden === 'nuevos') {
+            $query->orderBy('fecha_contratacion', 'desc');
+        } elseif ($orden === 'recientes') {
+            $query->orderBy('fecha_contratacion', 'asc');
+        } else {
+            $query->orderBy('nombre');
+        }
+
+        $empleados = $query->paginate(10)->appends(request()->except('page'));
 
         $departamentos = Empleado::whereNotNull('departamento')
             ->pluck('departamento')

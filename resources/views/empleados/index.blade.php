@@ -15,12 +15,23 @@
 
 {{-- Filtros de búsqueda --}}
 <form method="GET" class="mb-3">
-    <div class="row g-2 mb-2">
-        <div class="col-sm-4">
-            <label class="form-label small">Nombre</label>
-            <input type="text" name="nombre" class="form-control form-control-sm" value="{{ request('nombre') }}" placeholder="Buscar por nombre">
-        </div>
+   <div class="row g-3">
+
+    <div class="col-sm">
+        <label class="form-label small">Nombre</label>
+        <input type="text" name="nombre" class="form-control form-control-sm" value="{{ request('nombre') }}" placeholder="Buscar por nombre">
     </div>
+
+    <div class="col-sm">
+        <label class="form-label small">Orden</label>
+        <select name="orden" class="form-select form-select-sm">
+            <option value="">— Por defecto —</option>
+            <option value="newest" @if(request('orden') == 'nuevos') selected @endif>Más recientes</option>
+            <option value="oldest" @if(request('orden') == 'recientes') selected @endif>Más antiguos</option>
+        </select>
+    </div>
+
+</div>
     <div class="row g-2 align-items-end">
         <div class="col-sm-3">
             <label class="form-label small">Departamento</label>
@@ -56,6 +67,7 @@
                 <option value="0" @if(request('estado') === '0') selected @endif>Inactivo</option>
             </select>
         </div>
+        
         <div class="col-12 mt-2 d-flex gap-2">
             <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
             <a href="{{ route('empleados.index') }}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
