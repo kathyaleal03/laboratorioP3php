@@ -19,21 +19,23 @@ class EmpleadoController extends Controller
      */
     public function statistics()
     {
-        // Financieros
-        $avgSalaryOverall = (float) round(Empleado::avg('salario_base') ?? 0, 2);
-        $avgSalaryPerDept = Empleado::selectRaw('COALESCE(departamento, "Sin asignar") as departamento, AVG(salario_base) as avg_salary')
+        // Financieros — sólo empleados activos (estado = 1)
+        $avgSalaryOverall = (float) round(Empleado::where('estado', 1)->avg('salario_base') ?? 0, 2);
+        $avgSalaryPerDept = Empleado::where('estado', 1)
+            ->selectRaw('COALESCE(departamento, "Sin asignar") as departamento, AVG(salario_base) as avg_salary')
             ->groupBy('departamento')
             ->get();
 
-        $totalBonuses = (float) Empleado::sum('bonificacion');
-        $totalDiscounts = (float) Empleado::sum('descuento');
+        $totalBonuses = (float) Empleado::where('estado', 1)->sum('bonificacion');
+        $totalDiscounts = (float) Empleado::where('estado', 1)->sum('descuento');
 
         // Crecimiento salario neto vs año anterior: comparar promedio neto de contrataciones por año
         $currentYear = now()->year;
         $lastYear = $currentYear - 1;
 
         $avgNetForYear = function ($year) {
-            $emps = Empleado::whereYear('fecha_contratacion', $year)->get();
+            // considerar sólo empleados activos
+            $emps = Empleado::whereYear('fecha_contratacion', $year)->where('estado', 1)->get();
             if ($emps->isEmpty()) return 0.0;
             $avg = $emps->map(function ($e) {
                 return ((float) $e->salario_base + (float) ($e->bonificacion ?? 0) - (float) ($e->descuento ?? 0));
@@ -106,9 +108,8 @@ class EmpleadoController extends Controller
         $employeesWithEvalGT95 = Empleado::where('evaluacion_desempeno', '>', 95)->count();
         $totalEvalCount = $evalRows->count();
         $percentEvalGT70 = $totalEvalCount ? round(($evalRows->where('evaluacion_desempeno', '>', 70)->count() / $totalEvalCount) * 100, 1) : 0.0;
-
-        // Correlación salario-desempeño (Pearson)
-        $salaryEvalRows = Empleado::whereNotNull('evaluacion_desempeno')->whereNotNull('salario_base')->get();
+        // Correlación salario-desempeño: sólo activos
+        $salaryEvalRows = Empleado::where('estado', 1)->whereNotNull('evaluacion_desempeno')->whereNotNull('salario_base')->get();
         $salaryEvalCorr = 0.0;
         if ($salaryEvalRows->count() >= 2) {
             $xs = $salaryEvalRows->pluck('salario_base')->map(fn($v) => (float) $v)->values()->all();
@@ -133,10 +134,9 @@ class EmpleadoController extends Controller
         $globalAvgEvaluation = $evalRows->count() ? round($evalRows->avg('evaluacion_desempeno'), 2) : 0.0;
 
         // ------------------
-        // Antigüedad / Permanencia
-        // ------------------
+        // Antigüedad / Permanencia (sólo empleados activos)
         $now = \Carbon\Carbon::now();
-        $tenureRows = Empleado::whereNotNull('fecha_contratacion')->whereNotNull('salario_base')->get();
+        $tenureRows = Empleado::where('estado', 1)->whereNotNull('fecha_contratacion')->whereNotNull('salario_base')->get();
         $tenures = $tenureRows->map(function($e) use ($now) {
             try {
                 $d = \Carbon\Carbon::parse($e->fecha_contratacion);
@@ -187,12 +187,44 @@ class EmpleadoController extends Controller
         $countTenureOver10 = $tenures->where('>', 10)->count();
         $percentOver10 = $tenures->count() ? round(($countTenureOver10 / $tenures->count()) * 100, 1) : 0.0;
 
+        // Preparar datos para gráficos
+        $chartDeptLabels = $avgSalaryPerDept->pluck('departamento')->map(fn($v) => (string) $v)->all();
+        $chartDeptData = $avgSalaryPerDept->pluck('avg_salary')->map(fn($v) => (float) $v)->all();
+        // Scatter: sólo empleados activos
+        $scatterRows = Empleado::where('estado', 1)->whereNotNull('salario_base')->whereNotNull('evaluacion_desempeno')->get();
+        $chartScatterData = $scatterRows->map(function($e){
+            return ['x' => (float) $e->salario_base, 'y' => (float) $e->evaluacion_desempeno];
+        })->values()->all();
+
+        $chartGenderLabels = ['M', 'F', 'O'];
+        $chartGenderData = [($genderCounts['M'] ?? 0), ($genderCounts['F'] ?? 0), ($genderCounts['O'] ?? 0)];
+
+        // Evolución de salario promedio por año (por fecha_contratacion) — sólo activos
+        $salaryByYear = Empleado::where('estado', 1)->whereNotNull('fecha_contratacion')
+            ->selectRaw('YEAR(fecha_contratacion) as year, AVG(salario_base) as avg_salary')
+            ->groupBy('year')
+            ->orderBy('year')
+            ->get();
+        $chartYears = $salaryByYear->pluck('year')->map(fn($y) => (string) $y)->all();
+        $chartYearsData = $salaryByYear->pluck('avg_salary')->map(fn($v) => (float) $v)->all();
+
         return view('empleados.statistics', compact(
             'avgSalaryOverall', 'avgSalaryPerDept', 'totalBonuses', 'totalDiscounts', 'growthPct',
             'avgAge', 'genderDistribution', 'avgAgeDirectivos', 'avgAgeOperativos',
             'avgEvalPerDept', 'employeesWithEvalGT95', 'percentEvalGT70', 'salaryEvalCorr', 'globalAvgEvaluation',
-            'avgTenure', 'medianTenure', 'tenureSalaryCorr', 'percentOver10'
+            'avgTenure', 'medianTenure', 'tenureSalaryCorr', 'percentOver10',
+            // charts
+            'chartDeptLabels', 'chartDeptData', 'chartScatterData', 'chartGenderLabels', 'chartGenderData', 'chartYears', 'chartYearsData'
         ));
+    }
+
+    /**
+     * Helper para generar datasets para gráficos y anexarlos a la vista de estadísticas.
+     * (Se podría refactorizar a servicios, pero lo incluimos aquí por simplicidad.)
+     */
+    protected function appendChartData(array $data = [])
+    {
+        // Este método no se usa directamente; mantenido para posible refactor.
     }
 
     /** Mostrar formulario de creación */

@@ -271,6 +271,133 @@
     </div>
 </div>
 
+    <!-- Visualizaciones recomendadas -->
+    <div class="row g-4 mt-4">
+        <div class="col-lg-6">
+            <div class="card card-shadow">
+                <div class="card-body">
+                    <h6 class="card-title">Salario Promedio por Departamento</h6>
+                    <canvas id="chartDept" width="400" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card card-shadow">
+                <div class="card-body">
+                    <h6 class="card-title">Desempeño vs Salario Base</h6>
+                    <canvas id="chartScatter" width="400" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card card-shadow">
+                <div class="card-body">
+                    <h6 class="card-title">Distribución por Sexo</h6>
+                    <canvas id="chartGender" width="400" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card card-shadow">
+                <div class="card-body">
+                    <h6 class="card-title">Evolución Salario Promedio</h6>
+                    <canvas id="chartSalaryEvolution" width="400" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Datos desde PHP
+    const deptLabels = @json($chartDeptLabels ?? []);
+    const deptData = @json($chartDeptData ?? []);
+
+    const scatterData = @json($chartScatterData ?? []);
+
+    const genderLabels = @json($chartGenderLabels ?? ['M','F','O']);
+    const genderData = @json($chartGenderData ?? [0,0,0]);
+
+    const yearsLabels = @json($chartYears ?? []);
+    const yearsData = @json($chartYearsData ?? []);
+
+        // Colores
+        const palette = ['#4e73df','#1cc88a','#36b9cc','#f6c23e','#e74a3b','#858796'];
+
+        // Bar chart - Salario promedio por departamento
+        const ctxDept = document.getElementById('chartDept').getContext('2d');
+        new Chart(ctxDept, {
+            type: 'bar',
+            data: {
+                labels: deptLabels,
+                datasets: [{
+                    label: 'Salario Promedio ($)',
+                    data: deptData,
+                    backgroundColor: deptLabels.map((_,i)=> palette[i % palette.length]),
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+
+        // Scatter chart - Desempeño vs salario
+        const ctxScatter = document.getElementById('chartScatter').getContext('2d');
+        new Chart(ctxScatter, {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: 'Empleados',
+                    data: scatterData,
+                    backgroundColor: 'rgba(231, 74, 59, 0.8)'
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { title: { display: true, text: 'Salario Base ($)' } },
+                    y: { title: { display: true, text: 'Evaluación de Desempeño' }, suggestedMin: 0, suggestedMax: 100 }
+                }
+            }
+        });
+
+        // Pie chart - Distribución por sexo
+        const ctxGender = document.getElementById('chartGender').getContext('2d');
+        new Chart(ctxGender, {
+            type: 'pie',
+            data: {
+                labels: genderLabels,
+                datasets: [{ data: genderData, backgroundColor: ['#36b9cc','#e74a3b','#4e73df'] }]
+            },
+            options: { responsive: true }
+        });
+
+        // Line chart - Evolución salario promedio
+        const ctxYears = document.getElementById('chartSalaryEvolution').getContext('2d');
+        new Chart(ctxYears, {
+            type: 'line',
+            data: {
+                labels: yearsLabels,
+                datasets: [{
+                    label: 'Salario Promedio ($)',
+                    data: yearsData,
+                    borderColor: '#1cc88a',
+                    backgroundColor: 'rgba(28,200,138,0.15)',
+                    fill: true,
+                    tension: 0.2
+                }]
+            },
+            options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: false } } }
+        });
+    </script>
+
 @endsection
 
 @section('content_bottom')
