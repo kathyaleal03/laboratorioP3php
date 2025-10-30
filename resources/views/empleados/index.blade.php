@@ -13,6 +13,50 @@
     </div>
 </div>
 
+{{-- Filtros de búsqueda --}}
+<form method="GET" class="mb-3">
+    <div class="row g-2 align-items-end">
+        <div class="col-sm-3">
+            <label class="form-label small">Departamento</label>
+            <select name="departamento" class="form-select form-select-sm">
+                <option value="">— Todos —</option>
+                @foreach(($departamentos ?? []) as $dep)
+                    <option value="{{ $dep }}" @if(request('departamento') == $dep) selected @endif>{{ $dep }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="col-sm-3">
+            <label class="form-label small">Puesto</label>
+            <select name="puesto" class="form-select form-select-sm">
+                <option value="">— Todos —</option>
+                @foreach(($puestos ?? []) as $p)
+                    <option value="{{ $p }}" @if(request('puesto') == $p) selected @endif>{{ $p }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="col-sm-2">
+            <label class="form-label small">Salario min.</label>
+            <input type="number" step="0.01" name="salario_min" class="form-control form-control-sm" value="{{ request('salario_min') }}" placeholder="0.00">
+        </div>
+        <div class="col-sm-2">
+            <label class="form-label small">Salario max.</label>
+            <input type="number" step="0.01" name="salario_max" class="form-control form-control-sm" value="{{ request('salario_max') }}" placeholder="0.00">
+        </div>
+        <div class="col-sm-2">
+            <label class="form-label small">Estado</label>
+            <select name="estado" class="form-select form-select-sm">
+                <option value="">— Todos —</option>
+                <option value="1" @if(request('estado') === '1') selected @endif>Activo</option>
+                <option value="0" @if(request('estado') === '0') selected @endif>Inactivo</option>
+            </select>
+        </div>
+        <div class="col-12 mt-2 d-flex gap-2">
+            <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+            <a href="{{ route('empleados.index') }}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+        </div>
+    </div>
+</form>
+
 <div class="card card-shadow">
     <div class="card-body p-0">
         <div class="table-responsive">

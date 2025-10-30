@@ -8,11 +8,42 @@ use Illuminate\Http\Request;
 
 class EmpleadoController extends Controller
 {
-    /** Mostrar lista paginada */
-    public function index()
+    /** Mostrar lista paginada con filtros */
+    public function index(Request $request)
     {
-        $empleados = Empleado::orderBy('nombre')->paginate(10);
-        return view('empleados.index', compact('empleados'));
+        $query = Empleado::query();
+
+        // Filtros posibles: departamento, puesto, salario_min, salario_max, estado
+        if ($request->filled('departamento')) {
+            $query->where('departamento', $request->input('departamento'));
+        }
+
+        if ($request->filled('puesto')) {
+            // permitir coincidencia parcial en puesto
+            $query->where('puesto', 'like', '%' . $request->input('puesto') . '%');
+        }
+
+        if ($request->filled('salario_min')) {
+            $min = floatval($request->input('salario_min'));
+            $query->where('salario_base', '>=', $min);
+        }
+
+        if ($request->filled('salario_max')) {
+            $max = floatval($request->input('salario_max'));
+            $query->where('salario_base', '<=', $max);
+        }
+
+        if ($request->filled('estado') && in_array($request->input('estado'), ['0', '1'], true)) {
+            $query->where('estado', (int) $request->input('estado'));
+        }
+
+        // Listas para los selects de filtro
+        $departamentos = Empleado::select('departamento')->distinct()->whereNotNull('departamento')->orderBy('departamento')->pluck('departamento');
+        $puestos = Empleado::select('puesto')->distinct()->whereNotNull('puesto')->orderBy('puesto')->pluck('puesto');
+
+        $empleados = $query->orderBy('nombre')->paginate(10)->appends($request->except('page'));
+
+        return view('empleados.index', compact('empleados', 'departamentos', 'puestos'));
     }
 
     /**
