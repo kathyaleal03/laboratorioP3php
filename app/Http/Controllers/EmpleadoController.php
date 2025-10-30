@@ -261,6 +261,180 @@ class EmpleadoController extends Controller
     }
 
 
+    /**
+     * Exportar estadísticas en CSV (descarga).
+     */
+    public function export(Request $request)
+    {
+        $format = $request->get('format', 'csv');
+        if ($format !== 'csv') {
+            abort(400, 'Formato no soportado. Por ahora solo csv.');
+        }
+
+        // Recalcular métricas clave (misma lógica que en statistics)
+        $avgSalaryOverall = (float) round(Empleado::where('estado', 1)->avg('salario_base') ?? 0, 2);
+        $avgSalaryPerDept = Empleado::where('estado', 1)
+            ->selectRaw('COALESCE(departamento, "Sin asignar") as departamento, AVG(salario_base) as avg_salary')
+            ->groupBy('departamento')
+            ->get();
+
+        $totalBonuses = (float) Empleado::where('estado', 1)->sum('bonificacion');
+        $totalDiscounts = (float) Empleado::where('estado', 1)->sum('descuento');
+
+        $evalRows = Empleado::whereNotNull('evaluacion_desempeno')->get();
+        $employeesWithEvalGT95 = Empleado::where('evaluacion_desempeno', '>', 95)->count();
+        $totalEvalCount = $evalRows->count();
+        $percentEvalGT70 = $totalEvalCount ? round(($evalRows->where('evaluacion_desempeno', '>', 70)->count() / $totalEvalCount) * 100, 1) : 0.0;
+
+        $globalAvgEvaluation = $evalRows->count() ? round($evalRows->avg('evaluacion_desempeno'), 2) : 0.0;
+
+        $ages = Empleado::whereNotNull('fecha_nacimiento')->get()->map(function ($e) {
+            try {
+                return \Carbon\Carbon::parse($e->fecha_nacimiento)->age;
+            } catch (\Exception $ex) {
+                return null;
+            }
+        })->filter();
+        $avgAge = $ages->count() ? round($ages->average(), 1) : 0.0;
+
+        $avgEvalPerDept = Empleado::selectRaw('COALESCE(departamento, "Sin asignar") as departamento, AVG(evaluacion_desempeno) as avg_eval')
+            ->groupBy('departamento')
+            ->get();
+
+        $salaryByYear = Empleado::where('estado', 1)->whereNotNull('fecha_contratacion')
+            ->selectRaw('YEAR(fecha_contratacion) as year, AVG(salario_base) as avg_salary')
+            ->groupBy('year')
+            ->orderBy('year')
+            ->get();
+
+        $filename = 'report_estadisticas_' . now()->format('Ymd_His') . '.csv';
+
+        return response()->streamDownload(function () use (
+            $avgSalaryOverall, $avgSalaryPerDept, $totalBonuses, $totalDiscounts,
+            $globalAvgEvaluation, $employeesWithEvalGT95, $percentEvalGT70, $avgEvalPerDept, $avgAge, $salaryByYear
+        ) {
+            $out = fopen('php://output', 'w');
+
+            // Cabecera
+            fputcsv($out, ['Reporte de Estadísticas de Empleados', 'Generado: ' . now()->toDateTimeString()]);
+            fputcsv($out, []);
+
+            // Financieros
+            fputcsv($out, ['Financieros']);
+            fputcsv($out, ['Promedio salario base', number_format($avgSalaryOverall, 2)]);
+            fputcsv($out, ['Total bonificaciones', number_format($totalBonuses, 2)]);
+            fputcsv($out, ['Total descuentos', number_format($totalDiscounts, 2)]);
+            fputcsv($out, []);
+
+            fputcsv($out, ['Promedio salario por departamento']);
+            fputcsv($out, ['Departamento', 'Promedio salario']);
+            foreach ($avgSalaryPerDept as $r) {
+                fputcsv($out, [(string)$r->departamento, number_format($r->avg_salary, 2)]);
+            }
+            fputcsv($out, []);
+
+            // Demográficos y desempeño
+            fputcsv($out, ['Demográficos']);
+            fputcsv($out, ['Edad promedio', number_format($avgAge, 1)]);
+            fputcsv($out, []);
+
+            fputcsv($out, ['Desempeño']);
+            fputcsv($out, ['Evaluación promedio (global)', number_format($globalAvgEvaluation, 2)]);
+            fputcsv($out, ['Empleados con evaluación > 95', $employeesWithEvalGT95]);
+            fputcsv($out, ['% personal con evaluación > 70', $percentEvalGT70]);
+            fputcsv($out, []);
+
+            fputcsv($out, ['Evaluación promedio por departamento']);
+            fputcsv($out, ['Departamento', 'Evaluación promedio']);
+            foreach ($avgEvalPerDept as $r) {
+                fputcsv($out, [(string)$r->departamento, number_format($r->avg_eval, 2)]);
+            }
+            fputcsv($out, []);
+
+            // Evolución por año
+            fputcsv($out, ['Evolución salario promedio por año']);
+            fputcsv($out, ['Año', 'Salario promedio']);
+            foreach ($salaryByYear as $y) {
+                fputcsv($out, [$y->year, number_format($y->avg_salary, 2)]);
+            }
+
+            fclose($out);
+        }, $filename, [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+
+
+    /**
+     * Exportar estadísticas en PDF (descarga) — usa barryvdh/laravel-dompdf si está instalado.
+     */
+    public function exportPdf(Request $request)
+    {
+        // Recalcular métricas (mismo conjunto de datos que en statistics)
+        $avgSalaryOverall = (float) round(Empleado::where('estado', 1)->avg('salario_base') ?? 0, 2);
+        $avgSalaryPerDept = Empleado::where('estado', 1)
+            ->selectRaw('COALESCE(departamento, "Sin asignar") as departamento, AVG(salario_base) as avg_salary')
+            ->groupBy('departamento')
+            ->get();
+
+        $totalBonuses = (float) Empleado::where('estado', 1)->sum('bonificacion');
+        $totalDiscounts = (float) Empleado::where('estado', 1)->sum('descuento');
+
+        $evalRows = Empleado::whereNotNull('evaluacion_desempeno')->get();
+        $employeesWithEvalGT95 = Empleado::where('evaluacion_desempeno', '>', 95)->count();
+        $totalEvalCount = $evalRows->count();
+        $percentEvalGT70 = $totalEvalCount ? round(($evalRows->where('evaluacion_desempeno', '>', 70)->count() / $totalEvalCount) * 100, 1) : 0.0;
+
+        $globalAvgEvaluation = $evalRows->count() ? round($evalRows->avg('evaluacion_desempeno'), 2) : 0.0;
+
+        $ages = Empleado::whereNotNull('fecha_nacimiento')->get()->map(function ($e) {
+            try {
+                return \Carbon\Carbon::parse($e->fecha_nacimiento)->age;
+            } catch (\Exception $ex) {
+                return null;
+            }
+        })->filter();
+        $avgAge = $ages->count() ? round($ages->average(), 1) : 0.0;
+
+        $avgEvalPerDept = Empleado::selectRaw('COALESCE(departamento, "Sin asignar") as departamento, AVG(evaluacion_desempeno) as avg_eval')
+            ->groupBy('departamento')
+            ->get();
+
+        $salaryByYear = Empleado::where('estado', 1)->whereNotNull('fecha_contratacion')
+            ->selectRaw('YEAR(fecha_contratacion) as year, AVG(salario_base) as avg_salary')
+            ->groupBy('year')
+            ->orderBy('year')
+            ->get();
+
+        $data = compact(
+            'avgSalaryOverall', 'avgSalaryPerDept', 'totalBonuses', 'totalDiscounts',
+            'globalAvgEvaluation', 'employeesWithEvalGT95', 'percentEvalGT70', 'avgEvalPerDept', 'avgAge', 'salaryByYear'
+        );
+
+        // Verificar si dompdf está disponible mediante el binding 'dompdf.wrapper'
+        if (!app()->bound('dompdf.wrapper')) {
+            // Fallback: generar HTML y forzar descarga como archivo .html para que el usuario
+            // pueda abrirlo en el navegador y "Imprimir -> Guardar como PDF".
+            $html = view('empleados.statistics_pdf', $data)->render();
+            $filenameHtml = 'report_estadisticas_' . now()->format('Ymd_His') . '.html';
+
+            return response()->streamDownload(function() use ($html) {
+                echo $html;
+            }, $filenameHtml, [
+                'Content-Type' => 'text/html; charset=UTF-8',
+            ]);
+        }
+
+        $pdf = app('dompdf.wrapper');
+        $pdf->loadView('empleados.statistics_pdf', $data)->setPaper('a4', 'portrait');
+
+        $filename = 'report_estadisticas_' . now()->format('Ymd_His') . '.pdf';
+
+        // Forzar descarga del PDF
+        return $pdf->download($filename);
+    }
+
+
     protected function appendChartData(array $data = [])
     {
         

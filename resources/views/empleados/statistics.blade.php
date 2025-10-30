@@ -4,6 +4,14 @@
 <div class="container">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="mb-0">Estadísticas y Análisis</h2>
+        <div class="btn-group">
+            <a href="{{ route('empleados.statistics.export', ['format' => 'csv']) }}" class="btn btn-outline-primary">
+                <i class="bi bi-download me-1"></i> Descargar CSV
+            </a>
+            <a href="{{ route('empleados.statistics.export.pdf') }}" class="btn btn-outline-danger">
+                <i class="bi bi-file-earmark-pdf me-1"></i> Descargar PDF
+            </a>
+        </div>
     </div>
     <!-- Desempeño y Antigüedad -->
     <div class="row g-4 mt-4">

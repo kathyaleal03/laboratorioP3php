@@ -31,6 +31,18 @@
                 <dt class="col-sm-4">Salario neto</dt>
                 <dd class="col-sm-8">${{ number_format($empleado->salario_neto, 2) }}</dd>
 
+                <dt class="col-sm-4">Salario bruto</dt>
+                <dd class="col-sm-8">${{ number_format($empleado->salario_bruto ?? 0, 2) }}</dd>
+
+                <dt class="col-sm-4">Edad</dt>
+                <dd class="col-sm-8">{{ $empleado->edad !== null ? $empleado->edad . ' años' : '-' }}</dd>
+
+                <dt class="col-sm-4">Antigüedad</dt>
+                <dd class="col-sm-8">{{ $empleado->antiguedad !== null ? $empleado->antiguedad . ' años' : '-' }}</dd>
+
+                <dt class="col-sm-4">Relación Desempeño/Salario</dt>
+                <dd class="col-sm-8">@if($empleado->relacion_desempeno_salario !== null) {{ number_format($empleado->relacion_desempeno_salario, 4) }} @else - @endif</dd>
+
                 <dt class="col-sm-4">Fecha contratación</dt>
                 <dd class="col-sm-8">{{ optional($empleado->fecha_contratacion)->format('Y-m-d') }}</dd>
 

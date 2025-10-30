@@ -19,6 +19,8 @@ Route::get('/', function () {
 });
 
 // Estadísticas (definir antes del resource para evitar que el parámetro {empleado} capture 'estadisticas')
+Route::get('empleados/estadisticas/export/pdf', [EmpleadoController::class, 'exportPdf'])->name('empleados.statistics.export.pdf');
+Route::get('empleados/estadisticas/export', [EmpleadoController::class, 'export'])->name('empleados.statistics.export');
 Route::get('empleados/estadisticas', [EmpleadoController::class, 'statistics'])->name('empleados.statistics');
 // CRUD de empleados
 Route::resource('empleados', EmpleadoController::class);

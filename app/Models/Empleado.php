@@ -62,6 +62,10 @@ class Empleado extends Model
     /** Atributos agregados al array/json del modelo */
     protected $appends = [
         'salario_neto',
+        'salario_bruto',
+        'edad',
+        'antiguedad',
+        'relacion_desempeno_salario',
     ];
 
     /**
@@ -77,6 +81,49 @@ class Empleado extends Model
         $neto = (float) $salarioBase + (float) $bon - (float) $desc;
 
         return number_format($neto, 2, '.', '');
+    }
+
+    /** Salario bruto = salario_base + bonificacion */
+    public function getSalarioBrutoAttribute()
+    {
+        $salarioBase = $this->attributes['salario_base'] ?? 0;
+        $bon = $this->attributes['bonificacion'] ?? 0;
+        $bruto = (float) $salarioBase + (float) $bon;
+        return number_format($bruto, 2, '.', '');
+    }
+
+    /** Edad en años (entero) calculada desde fecha_nacimiento */
+    public function getEdadAttribute()
+    {
+        if (empty($this->fecha_nacimiento)) return null;
+        try {
+            return \Carbon\Carbon::parse($this->fecha_nacimiento)->age;
+        } catch (\Exception $ex) {
+            return null;
+        }
+    }
+
+    /** Antigüedad en años (entero) calculada desde fecha_contratacion */
+    public function getAntiguedadAttribute()
+    {
+        if (empty($this->fecha_contratacion)) return null;
+        try {
+            $now = \Carbon\Carbon::now();
+            $d = \Carbon\Carbon::parse($this->fecha_contratacion);
+            return (int) floor($d->diffInDays($now) / 365.25);
+        } catch (\Exception $ex) {
+            return null;
+        }
+    }
+
+    /** Relación desempeño / salario (evitar división por cero). Retorna float con 4 decimales o null. */
+    public function getRelacionDesempenoSalarioAttribute()
+    {
+        $salarioBase = (float) ($this->attributes['salario_base'] ?? 0);
+        $eval = (float) ($this->attributes['evaluacion_desempeno'] ?? 0);
+        if ($salarioBase <= 0) return null;
+        $rel = $eval / $salarioBase;
+        return round($rel, 4);
     }
 
     /** Scope para empleados activos (estado = 1) */
