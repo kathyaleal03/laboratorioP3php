@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Empleado;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class EmpleadoController extends Controller
@@ -249,12 +250,34 @@ class EmpleadoController extends Controller
             'evaluacion_desempeno' => 'nullable|numeric|min:0|max:100',
             'estado' => 'nullable|in:0,1',
         ]);
+        if (!empty($data['fecha_nacimiento']) && !empty($data['sexo'])) {
+
+                  
+            $fechaNacimiento = Carbon::parse($data['fecha_nacimiento']);
+            $fechaContratacion = Carbon::parse($data['fecha_contratacion']);
+
+                    
+                $años_empleado = $fechaNacimiento->diffInYears($fechaContratacion);
+
+                    if ($años_empleado >= 65 && $data['sexo'] == 'M') {
+                        return redirect()->back()
+                        ->withInput()
+                        ->withErrors(['fecha_nacimiento' => 'No se puede actualizar un empleado sus años no son aptos para el trabajo.']);
+                    } 
+                    else if ($años_empleado >= 60 && $data['sexo'] == 'F') {
+                        return redirect()->back()
+                        ->withInput()
+                        ->withErrors(['fecha_nacimiento' => 'No se puede actualizar un empleado sus años no son aptos para el trabajo.']);
+                    }
+        }
 
         // Asegurar valores por defecto si no vienen
         $data['bonificacion'] = $data['bonificacion'] ?? 0.00;
         $data['descuento'] = $data['descuento'] ?? 0.00;
         $data['evaluacion_desempeno'] = $data['evaluacion_desempeno'] ?? 0.00;
         $data['estado'] = $data['estado'] ?? 1;
+
+
 
         Empleado::create($data);
 
@@ -294,11 +317,30 @@ class EmpleadoController extends Controller
             'estado' => 'nullable|in:0,1',
         ]);
 
+
         $data['bonificacion'] = $data['bonificacion'] ?? 0.00;
         $data['descuento'] = $data['descuento'] ?? 0.00;
         $data['evaluacion_desempeno'] = $data['evaluacion_desempeno'] ?? 0.00;
         $data['estado'] = $data['estado'] ?? 1;
 
+        
+         if (!empty($data['fecha_nacimiento']) && !empty($data['sexo'])) {
+            $fechaNacimiento = Carbon::parse($data['fecha_nacimiento']);
+            $fechaContratacion = Carbon::parse($data['fecha_contratacion']);
+                    
+            $años_empleado = $fechaNacimiento->diffInYears($fechaContratacion);
+
+            if ($años_empleado >= 65 && $data['sexo'] == 'M') {
+                return redirect()->back()
+                    ->withInput()
+                    ->withErrors(['fecha_nacimiento' => 'No se puede actualizar un empleado sus años no son aptos para el trabajo.']);
+            } 
+            else if ($años_empleado >= 60 && $data['sexo'] == 'F') {
+                return redirect()->back()
+                    ->withInput()
+                    ->withErrors(['fecha_nacimiento' => 'No se puede actualizar una empleada sus años no son aptos para el trabajo.']);
+            }
+        }
         $empleado->update($data);
 
         return redirect()->route('empleados.index')->with('success', 'Empleado actualizado correctamente.');
