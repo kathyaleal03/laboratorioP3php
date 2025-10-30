@@ -18,5 +18,7 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+// Estadísticas (definir antes del resource para evitar que el parámetro {empleado} capture 'estadisticas')
+Route::get('empleados/estadisticas', [EmpleadoController::class, 'statistics'])->name('empleados.statistics');
 // CRUD de empleados
 Route::resource('empleados', EmpleadoController::class);

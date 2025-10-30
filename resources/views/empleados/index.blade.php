@@ -3,9 +3,14 @@
 @section('content')
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2 class="mb-0">Empleados</h2>
-    <a href="{{ route('empleados.create') }}" class="btn btn-primary">
-        <i class="bi bi-plus-lg me-1"></i> Crear empleado
-    </a>
+    <div class="d-flex gap-2">
+        <a href="{{ route('empleados.statistics') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-bar-chart-line me-1"></i> Ver estadísticas
+        </a>
+        <a href="{{ route('empleados.create') }}" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i> Crear empleado
+        </a>
+    </div>
 </div>
 
 <div class="card card-shadow">

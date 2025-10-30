@@ -14,6 +14,187 @@ class EmpleadoController extends Controller
         return view('empleados.index', compact('empleados'));
     }
 
+    /**
+     * Mostrar estadísticas financieras y demográficas.
+     */
+    public function statistics()
+    {
+        // Financieros
+        $avgSalaryOverall = (float) round(Empleado::avg('salario_base') ?? 0, 2);
+        $avgSalaryPerDept = Empleado::selectRaw('COALESCE(departamento, "Sin asignar") as departamento, AVG(salario_base) as avg_salary')
+            ->groupBy('departamento')
+            ->get();
+
+        $totalBonuses = (float) Empleado::sum('bonificacion');
+        $totalDiscounts = (float) Empleado::sum('descuento');
+
+        // Crecimiento salario neto vs año anterior: comparar promedio neto de contrataciones por año
+        $currentYear = now()->year;
+        $lastYear = $currentYear - 1;
+
+        $avgNetForYear = function ($year) {
+            $emps = Empleado::whereYear('fecha_contratacion', $year)->get();
+            if ($emps->isEmpty()) return 0.0;
+            $avg = $emps->map(function ($e) {
+                return ((float) $e->salario_base + (float) ($e->bonificacion ?? 0) - (float) ($e->descuento ?? 0));
+            })->average();
+            return (float) $avg;
+        };
+
+        $avgNetCurrentYear = $avgNetForYear($currentYear);
+        $avgNetLastYear = $avgNetForYear($lastYear);
+
+        $growthPct = 0.0;
+        if ($avgNetLastYear > 0) {
+            $growthPct = round((($avgNetCurrentYear - $avgNetLastYear) / $avgNetLastYear) * 100, 2);
+        }
+
+        // Demográficos
+        $ages = Empleado::whereNotNull('fecha_nacimiento')->get()->map(function ($e) {
+            try {
+                return \Carbon\Carbon::parse($e->fecha_nacimiento)->age;
+            } catch (\Exception $ex) {
+                return null;
+            }
+        })->filter();
+
+        $avgAge = $ages->count() ? round($ages->average(), 1) : 0.0;
+
+        $genderCounts = Empleado::selectRaw('COALESCE(sexo, "O") as sexo, COUNT(*) as cnt')
+            ->groupBy('sexo')
+            ->pluck('cnt', 'sexo')
+            ->toArray();
+
+        $totalPersons = array_sum($genderCounts) ?: Empleado::count() ?: 1;
+        $genderDistribution = [
+            'M' => round((($genderCounts['M'] ?? 0) / $totalPersons) * 100, 1),
+            'F' => round((($genderCounts['F'] ?? 0) / $totalPersons) * 100, 1),
+            'O' => round((($genderCounts['O'] ?? 0) / $totalPersons) * 100, 1),
+        ];
+
+        // Edad promedio por puesto directivo vs operativa
+        // Clasificamos 'directivo' por presencia de palabras clave en el campo puesto
+        $leadKeywords = ['Director','Gerente','Jefe','Chief','Manager','Head'];
+
+        $directivos = Empleado::whereNotNull('puesto')
+            ->get()
+            ->filter(function ($e) use ($leadKeywords) {
+                foreach ($leadKeywords as $kw) {
+                    if (stripos($e->puesto, $kw) !== false) return true;
+                }
+                return false;
+            });
+
+        $operativos = Empleado::where(function($q) use ($leadKeywords) {
+                // include those without lead keywords
+                foreach ($leadKeywords as $kw) {
+                    $q->whereRaw('COALESCE(puesto, "") NOT LIKE ?', ["%{$kw}%"]);
+                }
+            })->get();
+
+        $avgAgeDirectivos = $directivos->pluck('fecha_nacimiento')->filter()->map(function($d){ try { return \Carbon\Carbon::parse($d)->age; } catch(\Exception $ex){ return null; } })->filter()->avg() ?: 0.0;
+        $avgAgeOperativos = $operativos->pluck('fecha_nacimiento')->filter()->map(function($d){ try { return \Carbon\Carbon::parse($d)->age; } catch(\Exception $ex){ return null; } })->filter()->avg() ?: 0.0;
+
+        // ------------------
+        // Desempeño
+        // ------------------
+        $avgEvalPerDept = Empleado::selectRaw('COALESCE(departamento, "Sin asignar") as departamento, AVG(evaluacion_desempeno) as avg_eval')
+            ->groupBy('departamento')
+            ->get();
+
+        $evalRows = Empleado::whereNotNull('evaluacion_desempeno')->get();
+        $employeesWithEvalGT95 = Empleado::where('evaluacion_desempeno', '>', 95)->count();
+        $totalEvalCount = $evalRows->count();
+        $percentEvalGT70 = $totalEvalCount ? round(($evalRows->where('evaluacion_desempeno', '>', 70)->count() / $totalEvalCount) * 100, 1) : 0.0;
+
+        // Correlación salario-desempeño (Pearson)
+        $salaryEvalRows = Empleado::whereNotNull('evaluacion_desempeno')->whereNotNull('salario_base')->get();
+        $salaryEvalCorr = 0.0;
+        if ($salaryEvalRows->count() >= 2) {
+            $xs = $salaryEvalRows->pluck('salario_base')->map(fn($v) => (float) $v)->values()->all();
+            $ys = $salaryEvalRows->pluck('evaluacion_desempeno')->map(fn($v) => (float) $v)->values()->all();
+            $n = count($xs);
+            $meanX = array_sum($xs) / $n;
+            $meanY = array_sum($ys) / $n;
+            $cov = 0.0; $varX = 0.0; $varY = 0.0;
+            for ($i = 0; $i < $n; $i++) {
+                $dx = $xs[$i] - $meanX;
+                $dy = $ys[$i] - $meanY;
+                $cov += $dx * $dy;
+                $varX += $dx * $dx;
+                $varY += $dy * $dy;
+            }
+            if ($varX > 0 && $varY > 0) {
+                $salaryEvalCorr = round($cov / sqrt($varX * $varY), 2);
+            }
+        }
+
+        // Evaluación promedio global (por departamento mostramos arriba)
+        $globalAvgEvaluation = $evalRows->count() ? round($evalRows->avg('evaluacion_desempeno'), 2) : 0.0;
+
+        // ------------------
+        // Antigüedad / Permanencia
+        // ------------------
+        $now = \Carbon\Carbon::now();
+        $tenureRows = Empleado::whereNotNull('fecha_contratacion')->whereNotNull('salario_base')->get();
+        $tenures = $tenureRows->map(function($e) use ($now) {
+            try {
+                $d = \Carbon\Carbon::parse($e->fecha_contratacion);
+                // años con decimales
+                return $d->diffInDays($now) / 365.25;
+            } catch (\Exception $ex) {
+                return null;
+            }
+        })->filter()->values();
+
+        $avgTenure = $tenures->count() ? round($tenures->avg(), 2) : 0.0; // antigüedad promedio
+        // tiempo promedio de permanencia -> mediana de tenures
+        $medianTenure = 0.0;
+        if ($tenures->count()) {
+            $sorted = $tenures->sort()->values()->all();
+            $m = count($sorted);
+            $mid = (int) floor(($m - 1) / 2);
+            if ($m % 2) {
+                $medianTenure = round($sorted[$mid], 2);
+            } else {
+                $medianTenure = round(($sorted[$mid] + $sorted[$mid + 1]) / 2, 2);
+            }
+        }
+
+        // Correlación antigüedad-salario
+        $tenureSalaryCorr = 0.0;
+        if ($tenures->count() >= 2) {
+            $xs = $tenureRows->map(function($e) use ($now) { try { return (\Carbon\Carbon::parse($e->fecha_contratacion)->diffInDays($now) / 365.25); } catch (\Exception $ex) { return null; } })->filter()->values()->all();
+            $ys = $tenureRows->map(fn($e) => (float) $e->salario_base)->values()->all();
+            if (count($xs) === count($ys) && count($xs) >= 2) {
+                $n = count($xs);
+                $meanX = array_sum($xs) / $n;
+                $meanY = array_sum($ys) / $n;
+                $cov = 0.0; $varX = 0.0; $varY = 0.0;
+                for ($i = 0; $i < $n; $i++) {
+                    $dx = $xs[$i] - $meanX;
+                    $dy = $ys[$i] - $meanY;
+                    $cov += $dx * $dy;
+                    $varX += $dx * $dx;
+                    $varY += $dy * $dy;
+                }
+                if ($varX > 0 && $varY > 0) {
+                    $tenureSalaryCorr = round($cov / sqrt($varX * $varY), 2);
+                }
+            }
+        }
+
+        $countTenureOver10 = $tenures->where('>', 10)->count();
+        $percentOver10 = $tenures->count() ? round(($countTenureOver10 / $tenures->count()) * 100, 1) : 0.0;
+
+        return view('empleados.statistics', compact(
+            'avgSalaryOverall', 'avgSalaryPerDept', 'totalBonuses', 'totalDiscounts', 'growthPct',
+            'avgAge', 'genderDistribution', 'avgAgeDirectivos', 'avgAgeOperativos',
+            'avgEvalPerDept', 'employeesWithEvalGT95', 'percentEvalGT70', 'salaryEvalCorr', 'globalAvgEvaluation',
+            'avgTenure', 'medianTenure', 'tenureSalaryCorr', 'percentOver10'
+        ));
+    }
+
     /** Mostrar formulario de creación */
     public function create()
     {
