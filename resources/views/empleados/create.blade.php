@@ -1,13 +1,16 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="container">
-    <h1>Crear empleado</h1>
+<div class="mx-auto" style="max-width: 900px;">
+    <div class="card card-shadow">
+        <div class="card-body">
+            <h3 class="card-title mb-3">Crear empleado</h3>
 
-    <form action="{{ route('empleados.store') }}" method="POST">
-        @include('empleados._form')
-    </form>
-
-    <a href="{{ route('empleados.index') }}" class="btn btn-link mt-3">Volver</a>
+            <form action="{{ route('empleados.store') }}" method="POST">
+                @include('empleados._form')
+            </form>
+        </div>
+    </div>
 </div>
+
 @endsection
