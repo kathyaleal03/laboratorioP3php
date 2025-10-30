@@ -26,8 +26,8 @@
         <label class="form-label small">Orden</label>
         <select name="orden" class="form-select form-select-sm">
             <option value="">— Por defecto —</option>
-            <option value="newest" @if(request('orden') == 'nuevos') selected @endif>Más recientes</option>
-            <option value="oldest" @if(request('orden') == 'recientes') selected @endif>Más antiguos</option>
+            <option value="newest" {{ in_array(request('orden'), ['nuevos','newest']) ? 'selected' : '' }}>Más recientes</option>
+            <option value="oldest" {{ in_array(request('orden'), ['recientes','oldest']) ? 'selected' : '' }}>Más antiguos</option>
         </select>
     </div>
 

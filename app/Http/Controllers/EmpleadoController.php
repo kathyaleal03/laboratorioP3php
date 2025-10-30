@@ -35,9 +35,12 @@ class EmpleadoController extends Controller
 
        
         $orden = request('orden');
-        if ($orden === 'nuevos') {
+        // Aceptar varios sinónimos en español/inglés desde la vista
+        if (in_array($orden, ['nuevos', 'newest'], true)) {
+            // Mostrar primero los más nuevos (fecha_contratacion descendente)
             $query->orderBy('fecha_contratacion', 'desc');
-        } elseif ($orden === 'recientes') {
+        } elseif (in_array($orden, ['recientes', 'oldest'], true)) {
+            // Mostrar primero los más antiguos (fecha_contratacion ascendente)
             $query->orderBy('fecha_contratacion', 'asc');
         } else {
             $query->orderBy('nombre');
@@ -411,27 +414,33 @@ class EmpleadoController extends Controller
             'globalAvgEvaluation', 'employeesWithEvalGT95', 'percentEvalGT70', 'avgEvalPerDept', 'avgAge', 'salaryByYear'
         );
 
-        // Verificar si dompdf está disponible mediante el binding 'dompdf.wrapper'
-        if (!app()->bound('dompdf.wrapper')) {
-            // Fallback: generar HTML y forzar descarga como archivo .html para que el usuario
-            // pueda abrirlo en el navegador y "Imprimir -> Guardar como PDF".
-            $html = view('empleados.statistics_pdf', $data)->render();
-            $filenameHtml = 'report_estadisticas_' . now()->format('Ymd_His') . '.html';
+        // Intentar generar PDF usando dompdf. Primero comprobar el binding, luego la fachada
+        // y finalmente hacer fallback a HTML descargable si no hay generador disponible.
+        $filename = 'report_estadisticas_' . now()->format('Ymd_His');
 
-            return response()->streamDownload(function() use ($html) {
-                echo $html;
-            }, $filenameHtml, [
-                'Content-Type' => 'text/html; charset=UTF-8',
-            ]);
+        // 1) binding 'dompdf.wrapper' (instalación típica del paquete)
+        if (app()->bound('dompdf.wrapper')) {
+            $pdf = app('dompdf.wrapper');
+            $pdf->loadView('empleados.statistics_pdf', $data)->setPaper('a4', 'portrait');
+            return $pdf->download($filename . '.pdf');
         }
 
-        $pdf = app('dompdf.wrapper');
-        $pdf->loadView('empleados.statistics_pdf', $data)->setPaper('a4', 'portrait');
+        // 2) intentar usar la fachada si está disponible (evita errores si no está ligada)
+        if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('empleados.statistics_pdf', $data)->setPaper('a4', 'portrait');
+            return $pdf->download($filename . '.pdf');
+        }
 
-        $filename = 'report_estadisticas_' . now()->format('Ymd_His') . '.pdf';
+        // 3) Fallback: generar HTML y forzar descarga como archivo .html para que el usuario
+        // pueda abrirlo en el navegador y "Imprimir -> Guardar como PDF".
+        $html = view('empleados.statistics_pdf', $data)->render();
+        $filenameHtml = $filename . '.html';
 
-        // Forzar descarga del PDF
-        return $pdf->download($filename);
+        return response()->streamDownload(function() use ($html) {
+            echo $html;
+        }, $filenameHtml, [
+            'Content-Type' => 'text/html; charset=UTF-8',
+        ]);
     }
 
 
