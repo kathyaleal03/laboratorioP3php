@@ -15,6 +15,12 @@
 
 {{-- Filtros de búsqueda --}}
 <form method="GET" class="mb-3">
+    <div class="row g-2 mb-2">
+        <div class="col-sm-4">
+            <label class="form-label small">Nombre</label>
+            <input type="text" name="nombre" class="form-control form-control-sm" value="{{ request('nombre') }}" placeholder="Buscar por nombre">
+        </div>
+    </div>
     <div class="row g-2 align-items-end">
         <div class="col-sm-3">
             <label class="form-label small">Departamento</label>
@@ -40,7 +46,7 @@
         </div>
         <div class="col-sm-2">
             <label class="form-label small">Salario max.</label>
-            <input type="number" step="0.01" name="salario_max" class="form-control form-control-sm" value="{{ request('salario_max') }}" placeholder="0.00">
+            <input type="number" step="0.01" min=0  name="salario_max" class="form-control form-control-sm" value="{{ request('salario_max') }}" placeholder="0.00">
         </div>
         <div class="col-sm-2">
             <label class="form-label small">Estado</label>
@@ -119,7 +125,7 @@
 </div>
 
 <div class="mt-3 d-flex justify-content-center">
-    {{-- Forzar vista de paginación de Bootstrap 5 para evitar conflictos con estilos Tailwind u otros --}}
+   
     {{ $empleados->links('pagination::bootstrap-5') }}
 </div>
 

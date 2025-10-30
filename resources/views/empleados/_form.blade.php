@@ -29,7 +29,7 @@
         <label for="salario_base" class="form-label">Salario base</label>
         <div class="input-group">
             <span class="input-group-text">$</span>
-            <input type="number" step="0.01" name="salario_base" id="salario_base" class="form-control" value="{{ old('salario_base', $empleado->salario_base ?? '') }}" required>
+            <input type="number" step="0.01" min=0 name="salario_base" id="salario_base" class="form-control" value="{{ old('salario_base', $empleado->salario_base ?? '') }}" required>
         </div>
         @error('salario_base')<div class="text-danger small">{{ $message }}</div>@enderror
     </div>
@@ -38,7 +38,7 @@
         <label for="bonificacion" class="form-label">Bonificación</label>
         <div class="input-group">
             <span class="input-group-text">$</span>
-            <input type="number" step="0.01" name="bonificacion" id="bonificacion" class="form-control" value="{{ old('bonificacion', $empleado->bonificacion ?? 0) }}">
+            <input type="number" min=0 step="0.01" name="bonificacion" id="bonificacion" class="form-control" value="{{ old('bonificacion', $empleado->bonificacion ?? 0) }}">
         </div>
         @error('bonificacion')<div class="text-danger small">{{ $message }}</div>@enderror
     </div>
@@ -47,7 +47,7 @@
         <label for="descuento" class="form-label">Descuento</label>
         <div class="input-group">
             <span class="input-group-text">$</span>
-            <input type="number" step="0.01" name="descuento" id="descuento" class="form-control" value="{{ old('descuento', $empleado->descuento ?? 0) }}">
+            <input type="number" min=0 step="0.01" name="descuento" id="descuento" class="form-control" value="{{ old('descuento', $empleado->descuento ?? 0) }}">
         </div>
         @error('descuento')<div class="text-danger small">{{ $message }}</div>@enderror
     </div>
@@ -71,7 +71,7 @@
 
     <div class="col-md-3">
         <label for="evaluacion_desempeno" class="form-label">Evaluación (%)</label>
-        <input type="number" step="0.01" name="evaluacion_desempeno" id="evaluacion_desempeno" class="form-control" value="{{ old('evaluacion_desempeno', $empleado->evaluacion_desempeno ?? 0) }}">
+        <input type="number" step="0.01" min=0 name="evaluacion_desempeno" id="evaluacion_desempeno" class="form-control" value="{{ old('evaluacion_desempeno', $empleado->evaluacion_desempeno ?? 0) }}">
         @error('evaluacion_desempeno')<div class="text-danger small">{{ $message }}</div>@enderror
     </div>
 

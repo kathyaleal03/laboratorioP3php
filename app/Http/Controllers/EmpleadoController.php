@@ -8,40 +8,46 @@ use Illuminate\Http\Request;
 
 class EmpleadoController extends Controller
 {
-    /** Mostrar lista paginada con filtros */
-    public function index(Request $request)
+   
+    public function index()
     {
+        
         $query = Empleado::query();
 
-        // Filtros posibles: departamento, puesto, salario_min, salario_max, estado
-        if ($request->filled('departamento')) {
-            $query->where('departamento', $request->input('departamento'));
+        if (request()->filled('nombre')) {
+            $query->where('nombre', 'like', '%' . request('nombre') . '%');
+        }
+        if (request()->filled('departamento')) {
+            $query->where('departamento', request('departamento'));
+        }
+        if (request()->filled('puesto')) {
+            $query->where('puesto', request('puesto'));
+        }
+        if (request()->filled('salario_min')) {
+            $query->where('salario_base', '>=', request('salario_min'));
+        }
+        if (request()->filled('salario_max')) {
+            $query->where('salario_base', '<=', request('salario_max'));
+        }
+        if (request()->filled('estado')) {
+            $query->where('estado', request('estado'));
         }
 
-        if ($request->filled('puesto')) {
-            // permitir coincidencia parcial en puesto
-            $query->where('puesto', 'like', '%' . $request->input('puesto') . '%');
-        }
+        $empleados = $query->orderBy('nombre')->paginate(10)->appends(request()->except('page'));
 
-        if ($request->filled('salario_min')) {
-            $min = floatval($request->input('salario_min'));
-            $query->where('salario_base', '>=', $min);
-        }
+        $departamentos = Empleado::whereNotNull('departamento')
+            ->pluck('departamento')
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
 
-        if ($request->filled('salario_max')) {
-            $max = floatval($request->input('salario_max'));
-            $query->where('salario_base', '<=', $max);
-        }
-
-        if ($request->filled('estado') && in_array($request->input('estado'), ['0', '1'], true)) {
-            $query->where('estado', (int) $request->input('estado'));
-        }
-
-        // Listas para los selects de filtro
-        $departamentos = Empleado::select('departamento')->distinct()->whereNotNull('departamento')->orderBy('departamento')->pluck('departamento');
-        $puestos = Empleado::select('puesto')->distinct()->whereNotNull('puesto')->orderBy('puesto')->pluck('puesto');
-
-        $empleados = $query->orderBy('nombre')->paginate(10)->appends($request->except('page'));
+        $puestos = Empleado::whereNotNull('puesto')
+            ->pluck('puesto')
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
 
         return view('empleados.index', compact('empleados', 'departamentos', 'puestos'));
     }
@@ -51,7 +57,7 @@ class EmpleadoController extends Controller
      */
     public function statistics()
     {
-        // Financieros — sólo empleados activos (estado = 1)
+        // Financieros 
         $avgSalaryOverall = (float) round(Empleado::where('estado', 1)->avg('salario_base') ?? 0, 2);
         $avgSalaryPerDept = Empleado::where('estado', 1)
             ->selectRaw('COALESCE(departamento, "Sin asignar") as departamento, AVG(salario_base) as avg_salary')
@@ -61,12 +67,12 @@ class EmpleadoController extends Controller
         $totalBonuses = (float) Empleado::where('estado', 1)->sum('bonificacion');
         $totalDiscounts = (float) Empleado::where('estado', 1)->sum('descuento');
 
-        // Crecimiento salario neto vs año anterior: comparar promedio neto de contrataciones por año
+      
         $currentYear = now()->year;
         $lastYear = $currentYear - 1;
 
         $avgNetForYear = function ($year) {
-            // considerar sólo empleados activos
+
             $emps = Empleado::whereYear('fecha_contratacion', $year)->where('estado', 1)->get();
             if ($emps->isEmpty()) return 0.0;
             $avg = $emps->map(function ($e) {
@@ -106,8 +112,7 @@ class EmpleadoController extends Controller
             'O' => round((($genderCounts['O'] ?? 0) / $totalPersons) * 100, 1),
         ];
 
-        // Edad promedio por puesto directivo vs operativa
-        // Clasificamos 'directivo' por presencia de palabras clave en el campo puesto
+
         $leadKeywords = ['Director','Gerente','Jefe','Chief','Manager','Head'];
 
         $directivos = Empleado::whereNotNull('puesto')
@@ -120,7 +125,7 @@ class EmpleadoController extends Controller
             });
 
         $operativos = Empleado::where(function($q) use ($leadKeywords) {
-                // include those without lead keywords
+
                 foreach ($leadKeywords as $kw) {
                     $q->whereRaw('COALESCE(puesto, "") NOT LIKE ?', ["%{$kw}%"]);
                 }
@@ -140,7 +145,7 @@ class EmpleadoController extends Controller
         $employeesWithEvalGT95 = Empleado::where('evaluacion_desempeno', '>', 95)->count();
         $totalEvalCount = $evalRows->count();
         $percentEvalGT70 = $totalEvalCount ? round(($evalRows->where('evaluacion_desempeno', '>', 70)->count() / $totalEvalCount) * 100, 1) : 0.0;
-        // Correlación salario-desempeño: sólo activos
+        
         $salaryEvalRows = Empleado::where('estado', 1)->whereNotNull('evaluacion_desempeno')->whereNotNull('salario_base')->get();
         $salaryEvalCorr = 0.0;
         if ($salaryEvalRows->count() >= 2) {
@@ -162,17 +167,15 @@ class EmpleadoController extends Controller
             }
         }
 
-        // Evaluación promedio global (por departamento mostramos arriba)
+       
         $globalAvgEvaluation = $evalRows->count() ? round($evalRows->avg('evaluacion_desempeno'), 2) : 0.0;
 
-        // ------------------
-        // Antigüedad / Permanencia (sólo empleados activos)
         $now = \Carbon\Carbon::now();
         $tenureRows = Empleado::where('estado', 1)->whereNotNull('fecha_contratacion')->whereNotNull('salario_base')->get();
         $tenures = $tenureRows->map(function($e) use ($now) {
             try {
                 $d = \Carbon\Carbon::parse($e->fecha_contratacion);
-                // años con decimales
+        
                 return $d->diffInDays($now) / 365.25;
             } catch (\Exception $ex) {
                 return null;
@@ -180,7 +183,7 @@ class EmpleadoController extends Controller
         })->filter()->values();
 
         $avgTenure = $tenures->count() ? round($tenures->avg(), 2) : 0.0; // antigüedad promedio
-        // tiempo promedio de permanencia -> mediana de tenures
+
         $medianTenure = 0.0;
         if ($tenures->count()) {
             $sorted = $tenures->sort()->values()->all();
@@ -193,7 +196,6 @@ class EmpleadoController extends Controller
             }
         }
 
-        // Correlación antigüedad-salario
         $tenureSalaryCorr = 0.0;
         if ($tenures->count() >= 2) {
             $xs = $tenureRows->map(function($e) use ($now) { try { return (\Carbon\Carbon::parse($e->fecha_contratacion)->diffInDays($now) / 365.25); } catch (\Exception $ex) { return null; } })->filter()->values()->all();
@@ -219,10 +221,10 @@ class EmpleadoController extends Controller
         $countTenureOver10 = $tenures->where('>', 10)->count();
         $percentOver10 = $tenures->count() ? round(($countTenureOver10 / $tenures->count()) * 100, 1) : 0.0;
 
-        // Preparar datos para gráficos
+
         $chartDeptLabels = $avgSalaryPerDept->pluck('departamento')->map(fn($v) => (string) $v)->all();
         $chartDeptData = $avgSalaryPerDept->pluck('avg_salary')->map(fn($v) => (float) $v)->all();
-        // Scatter: sólo empleados activos
+ 
         $scatterRows = Empleado::where('estado', 1)->whereNotNull('salario_base')->whereNotNull('evaluacion_desempeno')->get();
         $chartScatterData = $scatterRows->map(function($e){
             return ['x' => (float) $e->salario_base, 'y' => (float) $e->evaluacion_desempeno];
@@ -231,7 +233,6 @@ class EmpleadoController extends Controller
         $chartGenderLabels = ['M', 'F', 'O'];
         $chartGenderData = [($genderCounts['M'] ?? 0), ($genderCounts['F'] ?? 0), ($genderCounts['O'] ?? 0)];
 
-        // Evolución de salario promedio por año (por fecha_contratacion) — sólo activos
         $salaryByYear = Empleado::where('estado', 1)->whereNotNull('fecha_contratacion')
             ->selectRaw('YEAR(fecha_contratacion) as year, AVG(salario_base) as avg_salary')
             ->groupBy('year')
@@ -245,27 +246,23 @@ class EmpleadoController extends Controller
             'avgAge', 'genderDistribution', 'avgAgeDirectivos', 'avgAgeOperativos',
             'avgEvalPerDept', 'employeesWithEvalGT95', 'percentEvalGT70', 'salaryEvalCorr', 'globalAvgEvaluation',
             'avgTenure', 'medianTenure', 'tenureSalaryCorr', 'percentOver10',
-            // charts
             'chartDeptLabels', 'chartDeptData', 'chartScatterData', 'chartGenderLabels', 'chartGenderData', 'chartYears', 'chartYearsData'
         ));
     }
 
-    /**
-     * Helper para generar datasets para gráficos y anexarlos a la vista de estadísticas.
-     * (Se podría refactorizar a servicios, pero lo incluimos aquí por simplicidad.)
-     */
+
     protected function appendChartData(array $data = [])
     {
-        // Este método no se usa directamente; mantenido para posible refactor.
+        
     }
 
-    /** Mostrar formulario de creación */
+
     public function create()
     {
         return view('empleados.create');
     }
 
-    /** Almacenar nuevo empleado */
+
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -281,55 +278,58 @@ class EmpleadoController extends Controller
             'evaluacion_desempeno' => 'nullable|numeric|min:0|max:100',
             'estado' => 'nullable|in:0,1',
         ]);
+         
+
+        $data['bonificacion'] = $data['bonificacion'] ?? 0.00;
+        $data['descuento'] = $data['descuento'] ?? 0.00;
+        $data['evaluacion_desempeno'] = $data['evaluacion_desempeno'] ?? 0.00;
+        $data['estado'] = $data['estado'] ?? 1;
+
+        $resultado_edad = Carbon::parse($data['fecha_nacimiento'])->diffInYears(Carbon::now());
+
         if (!empty($data['fecha_nacimiento']) && !empty($data['sexo'])) {
 
-                  
+            
             $fechaNacimiento = Carbon::parse($data['fecha_nacimiento']);
             $fechaContratacion = Carbon::parse($data['fecha_contratacion']);
 
                     
                 $años_empleado = $fechaNacimiento->diffInYears($fechaContratacion);
 
-                    if ($años_empleado >= 65 && $data['sexo'] == 'M') {
+                    if ($años_empleado >= 65 && $data['sexo'] == 'M' && $data['sexo'] =='O') {
                         return redirect()->back()
                         ->withInput()
-                        ->withErrors(['fecha_nacimiento' => 'No se puede actualizar un empleado sus años no son aptos para el trabajo.']);
+                        ->withErrors(['fecha_nacimiento' => 'No se puede crear un empleado sus años no son aptos para el trabajo.']);
                     } 
-                    else if ($años_empleado >= 60 && $data['sexo'] == 'F') {
+                    else if ($años_empleado >= 60 && $data['sexo'] == 'F' && $resultado_edad<18) {
                         return redirect()->back()
                         ->withInput()
-                        ->withErrors(['fecha_nacimiento' => 'No se puede actualizar un empleado sus años no son aptos para el trabajo.']);
+                        ->withErrors(['fecha_nacimiento' => 'No se puede crear un empleado sus años no son aptos para el trabajo.']);
+                    }else if($resultado_edad<18){
+                        return redirect()->back()
+                        ->withInput()
+                        ->withErrors(['fecha_nacimiento' => 'No se puede crear un empleado menor de edad.']);
                     }
         }
-
-        // Asegurar valores por defecto si no vienen
-        $data['bonificacion'] = $data['bonificacion'] ?? 0.00;
-        $data['descuento'] = $data['descuento'] ?? 0.00;
-        $data['evaluacion_desempeno'] = $data['evaluacion_desempeno'] ?? 0.00;
-        $data['estado'] = $data['estado'] ?? 1;
-
-
 
         Empleado::create($data);
 
         return redirect()->route('empleados.index')->with('success', 'Empleado creado correctamente.');
     }
 
-    /** Mostrar empleado */
     public function show($id)
     {
         $empleado = Empleado::findOrFail($id);
         return view('empleados.show', compact('empleado'));
     }
 
-    /** Mostrar formulario de edición */
     public function edit($id)
     {
         $empleado = Empleado::findOrFail($id);
         return view('empleados.edit', compact('empleado'));
     }
 
-    /** Actualizar empleado */
+
     public function update(Request $request, $id)
     {
         $empleado = Empleado::findOrFail($id);
@@ -354,19 +354,23 @@ class EmpleadoController extends Controller
         $data['evaluacion_desempeno'] = $data['evaluacion_desempeno'] ?? 0.00;
         $data['estado'] = $data['estado'] ?? 1;
 
-        
-         if (!empty($data['fecha_nacimiento']) && !empty($data['sexo'])) {
+        $resultado_edad = Carbon::parse($data['fecha_nacimiento'])->diffInYears(Carbon::now());
+
+        $apto= Carbon::parse(Date('now'));
+
+
+         if (!empty($data['fecha_nacimiento']) && !empty($data['sexo']) ) {
             $fechaNacimiento = Carbon::parse($data['fecha_nacimiento']);
             $fechaContratacion = Carbon::parse($data['fecha_contratacion']);
                     
             $años_empleado = $fechaNacimiento->diffInYears($fechaContratacion);
 
-            if ($años_empleado >= 65 && $data['sexo'] == 'M') {
+            if ($años_empleado >= 65 && $data['sexo'] == 'M' && $data['sexo'] =='O' || $resultado_edad<18) {
                 return redirect()->back()
                     ->withInput()
                     ->withErrors(['fecha_nacimiento' => 'No se puede actualizar un empleado sus años no son aptos para el trabajo.']);
             } 
-            else if ($años_empleado >= 60 && $data['sexo'] == 'F') {
+            else if ($años_empleado >= 60 && $data['sexo'] == 'F' ) {
                 return redirect()->back()
                     ->withInput()
                     ->withErrors(['fecha_nacimiento' => 'No se puede actualizar una empleada sus años no son aptos para el trabajo.']);
@@ -377,7 +381,7 @@ class EmpleadoController extends Controller
         return redirect()->route('empleados.index')->with('success', 'Empleado actualizado correctamente.');
     }
 
-    /** "Eliminar" empleado — marca como inactivo (estado = 0) */
+
     public function destroy($id)
     {
         $empleado = Empleado::findOrFail($id);
@@ -386,4 +390,5 @@ class EmpleadoController extends Controller
 
         return redirect()->route('empleados.index')->with('success', 'Empleado marcado como inactivo.');
     }
+    
 }
