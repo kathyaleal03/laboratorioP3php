@@ -477,32 +477,36 @@ class EmpleadoController extends Controller
         $data['descuento'] = $data['descuento'] ?? 0.00;
         $data['evaluacion_desempeno'] = $data['evaluacion_desempeno'] ?? 0.00;
         $data['estado'] = $data['estado'] ?? 1;
+        // Validaciones de fecha/edad: si se proporcionó fecha de nacimiento y fecha de contratación
+        if (!empty($data['fecha_nacimiento']) && !empty($data['fecha_contratacion'])) {
+            try {
+                $fechaNacimiento = Carbon::parse($data['fecha_nacimiento']);
+                $fechaContratacion = Carbon::parse($data['fecha_contratacion']);
+            } catch (\Exception $ex) {
+                return redirect()->back()->withInput()->withErrors(['fecha_nacimiento' => 'Fechas inválidas.']);
+            }
 
-        $resultado_edad = Carbon::parse($data['fecha_nacimiento'])->diffInYears(Carbon::now());
+            // No permitir contratar en la misma fecha de nacimiento ni antes
+            if ($fechaContratacion->lessThanOrEqualTo($fechaNacimiento)) {
+                return redirect()->back()
+                    ->withInput()
+                    ->withErrors(['fecha_contratacion' => 'La fecha de contratación debe ser posterior a la fecha de nacimiento.']);
+            }
 
-        if (!empty($data['fecha_nacimiento']) && !empty($data['sexo'])) {
+            // Edad en el momento de la contratación
+            $edadEnContratacion = $fechaNacimiento->diffInYears($fechaContratacion);
 
-            
-            $fechaNacimiento = Carbon::parse($data['fecha_nacimiento']);
-            $fechaContratacion = Carbon::parse($data['fecha_contratacion']);
+            if ($edadEnContratacion < 18) {
+                return redirect()->back()
+                    ->withInput()
+                    ->withErrors(['fecha_nacimiento' => 'No se puede crear un empleado menor de edad (edad en contratación: ' . $edadEnContratacion . ' años).']);
+            }
 
-                    
-                $años_empleado = $fechaNacimiento->diffInYears($fechaContratacion);
-
-                    if ($años_empleado >= 65 && $data['sexo'] == 'M' && $data['sexo'] =='O') {
-                        return redirect()->back()
-                        ->withInput()
-                        ->withErrors(['fecha_nacimiento' => 'No se puede crear un empleado sus años no son aptos para el trabajo.']);
-                    } 
-                    else if ($años_empleado >= 60 && $data['sexo'] == 'F' && $resultado_edad<18) {
-                        return redirect()->back()
-                        ->withInput()
-                        ->withErrors(['fecha_nacimiento' => 'No se puede crear un empleado sus años no son aptos para el trabajo.']);
-                    }else if($resultado_edad<18){
-                        return redirect()->back()
-                        ->withInput()
-                        ->withErrors(['fecha_nacimiento' => 'No se puede crear un empleado menor de edad.']);
-                    }
+            if ($edadEnContratacion > 65) {
+                return redirect()->back()
+                    ->withInput()
+                    ->withErrors(['fecha_nacimiento' => 'No se puede crear un empleado mayor a 65 años en la fecha de contratación (edad en contratación: ' . $edadEnContratacion . ' años).']);
+            }
         }
 
         Empleado::create($data);
@@ -546,27 +550,35 @@ class EmpleadoController extends Controller
         $data['descuento'] = $data['descuento'] ?? 0.00;
         $data['evaluacion_desempeno'] = $data['evaluacion_desempeno'] ?? 0.00;
         $data['estado'] = $data['estado'] ?? 1;
+        // Validaciones de fecha/edad al actualizar: si se proporcionó fecha de nacimiento y fecha de contratación
+        if (!empty($data['fecha_nacimiento']) && !empty($data['fecha_contratacion'])) {
+            try {
+                $fechaNacimiento = Carbon::parse($data['fecha_nacimiento']);
+                $fechaContratacion = Carbon::parse($data['fecha_contratacion']);
+            } catch (\Exception $ex) {
+                return redirect()->back()->withInput()->withErrors(['fecha_nacimiento' => 'Fechas inválidas.']);
+            }
 
-        $resultado_edad = Carbon::parse($data['fecha_nacimiento'])->diffInYears(Carbon::now());
-
-        $apto= Carbon::parse(Date('now'));
-
-
-         if (!empty($data['fecha_nacimiento']) && !empty($data['sexo']) ) {
-            $fechaNacimiento = Carbon::parse($data['fecha_nacimiento']);
-            $fechaContratacion = Carbon::parse($data['fecha_contratacion']);
-                    
-            $años_empleado = $fechaNacimiento->diffInYears($fechaContratacion);
-
-            if ($años_empleado >= 65 && $data['sexo'] == 'M' && $data['sexo'] =='O' || $resultado_edad<18) {
+            // No permitir contratar en la misma fecha de nacimiento ni antes
+            if ($fechaContratacion->lessThanOrEqualTo($fechaNacimiento)) {
                 return redirect()->back()
                     ->withInput()
-                    ->withErrors(['fecha_nacimiento' => 'No se puede actualizar un empleado sus años no son aptos para el trabajo.']);
-            } 
-            else if ($años_empleado >= 60 && $data['sexo'] == 'F' ) {
+                    ->withErrors(['fecha_contratacion' => 'La fecha de contratación debe ser posterior a la fecha de nacimiento.']);
+            }
+
+            // Edad en el momento de la contratación
+            $edadEnContratacion = $fechaNacimiento->diffInYears($fechaContratacion);
+
+            if ($edadEnContratacion < 18) {
                 return redirect()->back()
                     ->withInput()
-                    ->withErrors(['fecha_nacimiento' => 'No se puede actualizar una empleada sus años no son aptos para el trabajo.']);
+                    ->withErrors(['fecha_nacimiento' => 'No se puede actualizar un empleado menor de edad (edad en contratación: ' . $edadEnContratacion . ' años).']);
+            }
+
+            if ($edadEnContratacion > 65) {
+                return redirect()->back()
+                    ->withInput()
+                    ->withErrors(['fecha_nacimiento' => 'No se puede actualizar un empleado mayor a 65 años en la fecha de contratación (edad en contratación: ' . $edadEnContratacion . ' años).']);
             }
         }
         $empleado->update($data);
